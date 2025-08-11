@@ -32,6 +32,8 @@ model Room {
   Admin      User     @relation(fields: [adminId], references: [id])
   chats     Chat[]
   createdAt DateTime @default(now())
+  DrawingSnapshots DrawingSnapshot[]
+  DrawingOps DrawingOp[]
 }
 
 model Chat {
@@ -41,4 +43,29 @@ model Chat {
   User    User   @relation(fields: [userId], references: [id])
   roomId  String
   Room    Room   @relation(fields: [roomId], references: [id])
+}
+
+model DrawingSnapshot {
+  id        String   @id @default(cuid())
+  roomId    String
+  seq       Int
+  snapshot  Json
+  createdAt DateTime @default(now())
+
+  // Relations
+  room      Room     @relation(fields: [roomId], references: [id])
+}
+
+model DrawingOp {
+  id        String   @id @default(cuid())
+  roomId    String
+  seq       Int
+  type      String
+  payload   Json
+  createdAt DateTime @default(now())
+
+  // Relations
+  room      Room     @relation(fields: [roomId], references: [id])
+
+  @@index([roomId, seq])
 }
