@@ -1,7 +1,11 @@
 import express, { Application } from "express";
 import { middleware } from "./middleware";
 import prisma from "@repo/db/prisma";
-import { CreateRoomSchema, CreateUserSchema, SigninSchema } from "@repo/common/types";
+import {
+  CreateRoomSchema,
+  CreateUserSchema,
+  SigninSchema,
+} from "@repo/common/types";
 import jwt from "jsonwebtoken";
 
 const app: Application = express();
@@ -28,17 +32,17 @@ app.use(express.json());
 
 app.post("/signup", async (req, res) => {
   const payload = req.body;
-  
+
   if (!payload.email || !payload.password) {
     return res.status(400).json({ error: "Email and password are required" });
   }
-  
+
   try {
     const parsedPayload = CreateUserSchema.safeParse(payload);
     if (!parsedPayload.success) {
-      return res.status(400).json({ 
-        error: "Invalid user data", 
-        details: parsedPayload.error 
+      return res.status(400).json({
+        error: "Invalid user data",
+        details: parsedPayload.error,
       });
     }
 
@@ -65,12 +69,12 @@ app.post("/signup", async (req, res) => {
         email: user.email,
         name: user.name,
       },
-      token: token
+      token: token,
     });
   } catch (e: any) {
-    if (e.code === 'P2002' && e.meta?.target?.includes('email')) {
-      return res.status(409).json({ 
-        error: 'A user with this email already exists' 
+    if (e.code === "P2002" && e.meta?.target?.includes("email")) {
+      return res.status(409).json({
+        error: "A user with this email already exists",
       });
     }
     console.error("Error creating user:", e);
@@ -83,9 +87,9 @@ app.post("/signin", async (req, res) => {
   const parsedPayload = SigninSchema.safeParse(payload);
 
   if (!parsedPayload.success) {
-    return res.status(400).json({ 
-      error: "Invalid credentials format", 
-      details: parsedPayload.error 
+    return res.status(400).json({
+      error: "Invalid credentials format",
+      details: parsedPayload.error,
     });
   }
 
@@ -116,7 +120,7 @@ app.post("/signin", async (req, res) => {
         email: user.email,
         name: user.name,
       },
-      token: token
+      token: token,
     });
   } catch (error) {
     console.error("Error signing in:", error);
@@ -127,7 +131,7 @@ app.post("/signin", async (req, res) => {
 // Create room endpoint - requires authentication
 app.post("/create-room", middleware, async (req, res) => {
   const payload = req.body;
-  
+
   // Validate request body exists
   if (!payload || Object.keys(payload).length === 0) {
     return res.status(400).json({ error: "Room data is required" });
@@ -136,9 +140,9 @@ app.post("/create-room", middleware, async (req, res) => {
   // Validate payload structure
   const parsedPayload = CreateRoomSchema.safeParse(payload);
   if (!parsedPayload.success) {
-    return res.status(400).json({ 
-      error: "Invalid room data", 
-      details: parsedPayload.error 
+    return res.status(400).json({
+      error: "Invalid room data",
+      details: parsedPayload.error,
     });
   }
 
@@ -152,12 +156,12 @@ app.post("/create-room", middleware, async (req, res) => {
     const existingRoom = await prisma.room.findUnique({
       where: {
         slug: parsedPayload.data.slug,
-      }
+      },
     });
 
     if (existingRoom) {
-      return res.status(409).json({ 
-        error: 'A room with this slug already exists' 
+      return res.status(409).json({
+        error: "A room with this slug already exists",
       });
     }
 
@@ -173,9 +177,9 @@ app.post("/create-room", middleware, async (req, res) => {
             id: true,
             email: true,
             name: true,
-          }
-        }
-      }
+          },
+        },
+      },
     });
 
     res.status(201).json({
@@ -190,16 +194,16 @@ app.post("/create-room", middleware, async (req, res) => {
     });
   } catch (e: any) {
     // Handle duplicate slug constraint (backup check)
-    if (e.code === 'P2002' && e.meta?.target?.includes('slug')) {
-      return res.status(409).json({ 
-        error: 'A room with this slug already exists' 
+    if (e.code === "P2002" && e.meta?.target?.includes("slug")) {
+      return res.status(409).json({
+        error: "A room with this slug already exists",
       });
     }
-    
+
     // Handle foreign key constraint (user doesn't exist)
-    if (e.code === 'P2003' && e.meta?.field_name?.includes('adminId')) {
-      return res.status(400).json({ 
-        error: 'Invalid user ID' 
+    if (e.code === "P2003" && e.meta?.field_name?.includes("adminId")) {
+      return res.status(400).json({
+        error: "Invalid user ID",
       });
     }
 
@@ -226,12 +230,12 @@ app.get("/my-rooms", middleware, async (req, res) => {
         _count: {
           select: {
             chats: true,
-          }
-        }
+          },
+        },
       },
       orderBy: {
-        createdAt: 'desc',
-      }
+        createdAt: "desc",
+      },
     });
 
     res.status(200).json({
@@ -263,7 +267,7 @@ app.get("/room/:slug", middleware, async (req, res) => {
             id: true,
             email: true,
             name: true,
-          }
+          },
         },
         chats: {
           include: {
@@ -272,14 +276,14 @@ app.get("/room/:slug", middleware, async (req, res) => {
                 id: true,
                 name: true,
                 email: true,
-              }
-            }
+              },
+            },
           },
           orderBy: {
-            id: 'asc',
-          }
-        }
-      }
+            id: "asc",
+          },
+        },
+      },
     });
 
     if (!room) {
@@ -292,6 +296,96 @@ app.get("/room/:slug", middleware, async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching room details:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get("/chat/:roomId", middleware, async (req, res) => {
+  const { roomId } = req.params;
+
+  if (!roomId) {
+    return res.status(400).json({ error: "Room ID is required" });
+  }
+
+  try {
+    console.log("=== DEBUG CHAT ENDPOINT ===");
+    console.log("Searching for chats with roomId:", roomId);
+
+    // 1. Check if the room exists
+    const room = await prisma.room.findUnique({
+      where: { id: roomId },
+    });
+    console.log("Room found by ID:", room);
+
+    // 2. Get total chat count in database
+    const totalChats = await prisma.chat.count();
+    console.log("Total chats in database:", totalChats);
+
+    // 3. Get sample chats to see their structure
+    const sampleChats = await prisma.chat.findMany({
+      take: 3,
+      select: {
+        id: true,
+        roomId: true,
+        message: true,
+        userId: true,
+      },
+    });
+    console.log("Sample chats:", JSON.stringify(sampleChats, null, 2));
+
+    // 4. Check chats for this specific room
+    const roomChats = await prisma.chat.findMany({
+      where: {
+        roomId: roomId,
+      },
+    });
+    console.log("Chats found for roomId:", roomChats.length);
+
+    // 5. Get unique roomIds to see what rooms actually have chats
+    const uniqueRoomIds = await prisma.chat.findMany({
+      distinct: ['roomId'],
+      select: {
+        roomId: true,
+      },
+    });
+    console.log("Unique roomIds with chats:", uniqueRoomIds);
+
+    // 6. Final query with full details
+    const chats = await prisma.chat.findMany({
+      where: {
+        roomId: roomId,
+      },
+      include: {
+        User: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: {
+        id: "asc",
+      },
+    });
+
+    console.log("Final chats result:", chats.length);
+    console.log("=== END DEBUG ===");
+
+    res.status(200).json({
+      msg: "Chat messages retrieved successfully",
+      chats: chats,
+      debug: {
+        searchedRoomId: roomId,
+        roomExists: !!room,
+        totalChatsInDB: totalChats,
+        chatsFoundForRoom: chats.length,
+        sampleChats: sampleChats.slice(0, 2), // Only first 2 for response
+        uniqueRoomIds: uniqueRoomIds.slice(0, 5), // Only first 5 for response
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching chat messages:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
