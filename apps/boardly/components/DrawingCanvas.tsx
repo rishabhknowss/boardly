@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import type { fabric as FabricType } from "fabric"
+import { fabric } from "fabric"
 import { Palette, Square, Circle, Type, Minus, Trash2, Download, Undo, MousePointer } from "lucide-react"
 
 interface DrawingCanvasProps {
@@ -19,15 +19,8 @@ interface DrawingCanvasProps {
   }>
 }
 
-let fabric: typeof FabricType
-
-if (typeof window !== "undefined") {
-  // only import fabric on client
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  fabric = require("fabric").fabric
-}
-
 type DrawingTool = "select" | "brush" | "rectangle" | "circle" | "text" | "line"
+type FabricObjectWithFromRemote = fabric.Object & { fromRemote?: boolean }
 
 export default function DrawingCanvas({ roomId, websocket, initialDrawings }: DrawingCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -53,61 +46,103 @@ export default function DrawingCanvas({ roomId, websocket, initialDrawings }: Dr
   const loadInitialDrawings = () => {
     if (!fabricCanvasRef.current) return
 
-    initialDrawings.forEach((drawing) => {
+    console.log("[v0] ===== LOADING INITIAL DRAWINGS =====")
+    console.log("[v0] Total initial drawings received:", initialDrawings.length)
+    console.log("[v0] Initial drawings data:", initialDrawings)
+
+    if (initialDrawings.length === 0) {
+      console.log("[v0] No initial drawings to load")
+      return
+    }
+
+    initialDrawings.forEach((drawing, index) => {
       try {
-        const drawingData = JSON.parse(drawing.message)
+        console.log(`[v0] Processing drawing ${index + 1}:`, drawing)
+
+        let drawingData = drawing.message
+        console.log("[v0] Raw message data:", drawingData, "Type:", typeof drawingData)
+
+        if (typeof drawingData === "string") {
+          try {
+            drawingData = JSON.parse(drawingData)
+            console.log("[v0] Parsed string message to object:", drawingData)
+          } catch (parseError) {
+            console.error("[v0] Failed to parse message as JSON:", parseError)
+            return
+          }
+        }
+
+        console.log("[v0] Final drawing data to render:", drawingData)
         handleRemoteDrawing(drawingData)
       } catch (error) {
-        console.error("Error loading drawing:", error)
+        console.error("[v0] Error loading drawing:", error, drawing)
       }
     })
+
+    console.log("[v0] ===== FINISHED LOADING INITIAL DRAWINGS =====")
   }
 
   const handleRemoteDrawing = (drawingData: any) => {
-    if (!fabricCanvasRef.current) return
+    if (!fabricCanvasRef.current) {
+      console.error("[v0] Canvas not available for remote drawing")
+      return
+    }
 
     const canvas = fabricCanvasRef.current
+    console.log("[v0] Handling remote drawing:", drawingData)
 
     try {
       switch (drawingData.type) {
         case "path":
-          fabric.Path.fromObject(drawingData.data, (path: fabric.Path) => {
+          console.log("[v0] Creating path from data:", drawingData.data)
+          fabric.Path.fromObject(drawingData.data, (path: FabricObjectWithFromRemote) => {
             path.fromRemote = true
             canvas.add(path)
             canvas.renderAll()
+            console.log("[v0] Path added to canvas")
           })
           break
         case "rect":
-          fabric.Rect.fromObject(drawingData.data, (rect: fabric.Rect) => {
+          console.log("[v0] Creating rectangle from data:", drawingData.data)
+          fabric.Rect.fromObject(drawingData.data, (rect: FabricObjectWithFromRemote) => {
             rect.fromRemote = true
             canvas.add(rect)
             canvas.renderAll()
+            console.log("[v0] Rectangle added to canvas")
           })
           break
         case "circle":
-          fabric.Circle.fromObject(drawingData.data, (circle: fabric.Circle) => {
+          console.log("[v0] Creating circle from data:", drawingData.data)
+          fabric.Circle.fromObject(drawingData.data, (circle: FabricObjectWithFromRemote) => {
             circle.fromRemote = true
             canvas.add(circle)
             canvas.renderAll()
+            console.log("[v0] Circle added to canvas")
           })
           break
         case "text":
-          fabric.Text.fromObject(drawingData.data, (text: fabric.Text) => {
+          console.log("[v0] Creating text from data:", drawingData.data)
+          fabric.Text.fromObject(drawingData.data, (text: FabricObjectWithFromRemote) => {
             text.fromRemote = true
             canvas.add(text)
             canvas.renderAll()
+            console.log("[v0] Text added to canvas")
           })
           break
         case "line":
-          fabric.Line.fromObject(drawingData.data, (line: fabric.Line) => {
+          console.log("[v0] Creating line from data:", drawingData.data)
+          fabric.Line.fromObject(drawingData.data, (line: FabricObjectWithFromRemote) => {
             line.fromRemote = true
             canvas.add(line)
             canvas.renderAll()
+            console.log("[v0] Line added to canvas")
           })
           break
+        default:
+          console.warn("[v0] Unknown drawing type:", drawingData.type)
       }
     } catch (error) {
-      console.error("Error handling remote drawing:", error)
+      console.error("[v0] Error handling remote drawing:", error, drawingData)
     }
   }
 
@@ -157,7 +192,7 @@ export default function DrawingCanvas({ roomId, websocket, initialDrawings }: Dr
       type: "chat_message",
       data: {
         roomId: roomId,
-        message: JSON.stringify(drawingData),
+        message: drawingData, // Send as object, backend will handle JSON serialization
       },
     }
 
@@ -266,7 +301,14 @@ export default function DrawingCanvas({ roomId, websocket, initialDrawings }: Dr
 
     fabricCanvasRef.current = canvas
 
-    loadInitialDrawings()
+    canvas.on("mouse:down", handleCanvasClick)
+    canvas.on("path:created", handleDrawingComplete)
+    canvas.on("object:added", handleObjectAdded)
+
+    setTimeout(() => {
+      console.log("[v0] Canvas initialized, loading initial drawings...")
+      loadInitialDrawings()
+    }, 500)
 
     if (websocket) {
       websocket.onmessage = (event) => {
@@ -277,15 +319,18 @@ export default function DrawingCanvas({ roomId, websocket, initialDrawings }: Dr
 
           if (data.type === "chat_message") {
             let drawingData = data.message
+            console.log("[v0] Raw drawing data from WebSocket:", drawingData, "Type:", typeof drawingData)
+
             if (typeof drawingData === "string") {
               try {
                 drawingData = JSON.parse(drawingData)
+                console.log("[v0] Parsed WebSocket drawing data:", drawingData)
               } catch (parseError) {
-                console.error("[v0] Failed to parse drawing data:", parseError)
+                console.error("[v0] Failed to parse WebSocket drawing data:", parseError)
                 return
               }
             }
-            console.log("[v0] Processing drawing data:", drawingData)
+            console.log("[v0] Processing WebSocket drawing data:", drawingData)
             handleRemoteDrawing(drawingData)
           }
         } catch (error) {
@@ -293,9 +338,6 @@ export default function DrawingCanvas({ roomId, websocket, initialDrawings }: Dr
         }
       }
     }
-
-    canvas.on("path:created", handleDrawingComplete)
-    canvas.on("object:added", handleObjectAdded)
 
     const handleResize = () => {
       canvas.setDimensions({

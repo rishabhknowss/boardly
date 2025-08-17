@@ -25,8 +25,11 @@ export default function DashboardPage() {
   const [rooms, setRooms] = useState<Room[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateRoom, setShowCreateRoom] = useState(false)
+  const [showJoinRoom, setShowJoinRoom] = useState(false)
   const [newRoomSlug, setNewRoomSlug] = useState("")
+  const [joinRoomSlug, setJoinRoomSlug] = useState("")
   const [createLoading, setCreateLoading] = useState(false)
+  const [joinLoading, setJoinLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
 
@@ -107,6 +110,36 @@ export default function DashboardPage() {
     }
   }
 
+  const handleJoinRoom = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setJoinLoading(true)
+    setError("")
+
+    console.log("[v0] Joining room with slug:", joinRoomSlug)
+
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch(`http://localhost:3000/room/${joinRoomSlug}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      console.log("[v0] Join room response:", { status: response.status })
+
+      if (response.ok) {
+        router.push(`/room/${joinRoomSlug}`)
+      } else {
+        setError("Room not found")
+      }
+    } catch (err) {
+      console.error("[v0] Join room error:", err)
+      setError("Network error")
+    } finally {
+      setJoinLoading(false)
+    }
+  }
+
   const handleLogout = () => {
     localStorage.removeItem("token")
     localStorage.removeItem("user")
@@ -157,12 +190,20 @@ export default function DashboardPage() {
         {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6">{error}</div>}
 
         <div className="mb-8">
-          <button
-            onClick={() => setShowCreateRoom(true)}
-            className="bg-indigo-600 text-white px-6 py-3 rounded-xl hover:bg-indigo-700 transition-all font-medium shadow-sm"
-          >
-            Create Room
-          </button>
+          <div className="flex gap-4">
+            <button
+              onClick={() => setShowCreateRoom(true)}
+              className="bg-indigo-600 text-white px-6 py-3 rounded-xl hover:bg-indigo-700 transition-all font-medium shadow-sm"
+            >
+              Create Room
+            </button>
+            <button
+              onClick={() => setShowJoinRoom(true)}
+              className="border border-indigo-600 text-indigo-600 px-6 py-3 rounded-xl hover:bg-indigo-50 transition-all font-medium"
+            >
+              Join Room
+            </button>
+          </div>
         </div>
 
         {showCreateRoom && (
@@ -197,6 +238,50 @@ export default function DashboardPage() {
                     onClick={() => {
                       setShowCreateRoom(false)
                       setNewRoomSlug("")
+                      setError("")
+                    }}
+                    className="flex-1 border border-gray-200 text-gray-700 py-3 rounded-xl hover:bg-gray-50 transition-all font-medium"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {showJoinRoom && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white border border-gray-200 rounded-2xl p-6 max-w-md w-full shadow-lg">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Join Room</h2>
+              <form onSubmit={handleJoinRoom}>
+                <div className="mb-4">
+                  <label htmlFor="joinSlug" className="block text-sm font-medium text-gray-700 mb-2">
+                    Room Name
+                  </label>
+                  <input
+                    type="text"
+                    id="joinSlug"
+                    value={joinRoomSlug}
+                    onChange={(e) => setJoinRoomSlug(e.target.value)}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="room-name"
+                    required
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="submit"
+                    disabled={joinLoading}
+                    className="flex-1 bg-indigo-600 text-white py-3 rounded-xl hover:bg-indigo-700 transition-all font-medium disabled:opacity-50 shadow-sm"
+                  >
+                    {joinLoading ? "Joining..." : "Join"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowJoinRoom(false)
+                      setJoinRoomSlug("")
                       setError("")
                     }}
                     className="flex-1 border border-gray-200 text-gray-700 py-3 rounded-xl hover:bg-gray-50 transition-all font-medium"
