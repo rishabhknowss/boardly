@@ -7,6 +7,7 @@ import {
   SigninSchema,
 } from "@repo/common/types";
 import jwt from "jsonwebtoken";
+import cors from "cors";
 
 const app: Application = express();
 
@@ -29,6 +30,8 @@ declare global {
 }
 
 app.use(express.json());
+
+app.use(cors())
 
 app.post("/signup", async (req, res) => {
   const payload = req.body;
