@@ -1,0 +1,18 @@
+FROM Node:23.8.0-alpine3.20
+
+RUN npm install -g pnpm
+
+WORKDIR /usr/src/app
+
+COPY package*.json ./package*.json
+COPY ./packages ./packages
+COPY ./turbo.json ./turbo.json
+
+RUN pnpm install --omit=dev
+
+COPY ./apps/worker ./apps/worker
+
+RUN pnpm run build
+
+CMD ["pnpm", "run", "start"]
+
